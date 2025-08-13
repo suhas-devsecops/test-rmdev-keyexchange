@@ -448,7 +448,7 @@ app.post('/reset-client-password/:id', async (req, res) => {
 
     // Store token (overwrite any existing for this user)
     await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [id]); // Clear old tokens
-    await pool.query('INSERT INTO password_reset_tokens (user_id, token, expiry, user_type) VALUES ($1, $2, $3,$4)', [id, token, expiry,'client']);
+    await pool.query('INSERT INTO password_reset_tokens (user_id, token, expiry,user_type) VALUES ($1, $2, $3,$4)', [id, token, expiry,'client']);
 
     // Send email with reset link
     const transporter = nodemailer.createTransport({
@@ -605,29 +605,6 @@ app.get('/activity-logs', async (req, res) => {
     console.error('Query logs error:', err);
     res.status(500).json({ error: 'Database error' });
   }
-});
-
-// LOGIN for Admin
-app.post('/admin-login', async (req, res) => {
-const { username, password } = req.body;
-if (!username || !password) return res.status(400).json({ error: 'Missing credentials' });
-try {
-const r = await pool.query(
-'SELECT id, hashed_password FROM admins WHERE (fullname = $1 OR email = $1)',
-[username]
-);
-const admin = r.rows;
-if (!admin.hashed_password) {
-  return res.status(401).json({ error: 'No password set. Use the password setup link.' });
-}
-const ok = await bcrypt.compare(password, admin.hashed_password);
-if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-
-return res.json({ message: 'Login OK', adminId: admin.id });
-} catch (err) {
-console.error('Admin login error:', err);
-return res.status(500).json({ error: 'Server error' });
-}
 });
 
 // ---------- INSERT ADMIN USERS FEATURE HERE ----------
