@@ -607,6 +607,29 @@ app.get('/activity-logs', async (req, res) => {
   }
 });
 
+// LOGIN for Admin
+app.post('/admin-login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const r = await pool.query(
+      'SELECT id, hashed_password FROM admins WHERE (fullname = $1 OR email = $1)',
+      [username]
+    );
+    if (r.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const admin = r.rows[0];
+    const match = await bcrypt.compare(password, admin.hashed_password || '');
+    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+
+    // SUCCESS
+    res.json({ message: 'Login OK', adminId: admin.id });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
 // ---------- INSERT ADMIN USERS FEATURE HERE ----------
 app.post('/add-admin', async (req, res) => {
   const { fullname, email, team } = req.body;
