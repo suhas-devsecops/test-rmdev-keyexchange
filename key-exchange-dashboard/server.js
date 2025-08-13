@@ -97,23 +97,23 @@ async function logActivity(userId, userType, action) {
   }
 }
 
+async function cleanupExpired(pool) {
+// Delete OTPs older than 10 minutes
+await pool.query("DELETE FROM client_otps WHERE expiry < NOW() - INTERVAL '10 minutes'");
+// Delete reset tokens older than 10 minutes
+await pool.query("DELETE FROM password_reset_tokens WHERE expiry < NOW() - INTERVAL '10 minutes'");
+}
+
 // NEW: Cleanup expired OTPs and reset tokens (deletes records older than 10 minutes)
 app.post('/cleanup-expired', async (req, res) => {
   try {
-    // Delete OTPs older than 10 minutes
-    await pool.query("DELETE FROM client_otps WHERE expiry < NOW() - INTERVAL '10 minutes'");
-
-    // Delete reset tokens older than 10 minutes
-    await pool.query("DELETE FROM password_reset_tokens WHERE expiry < NOW() - INTERVAL '10 minutes'");
-
+    await cleanupExpired(pool);
     res.json({ message: 'Expired records cleaned up' });
   } catch (err) {
     console.error('Cleanup error:', err);
     res.status(500).json({ error: 'Database error' });
   }
 });
-
-
 
 // Submit request (updated with wireguardkey and pgpkey)
 app.post('/submit-request', async (req, res) => {
@@ -757,12 +757,12 @@ app.post('/set-password', async (req, res) => {
 
 // Schedule cleanup every 10 minutes
 cron.schedule('*/10 * * * *', async () => {
-  try {
-    await fetch('http://172.174.230.197:3000/cleanup-expired', { method: 'POST' });
-    console.log('Expired records cleaned up');
-  } catch (err) {
-    console.error('Scheduled cleanup error:', err);
-  }
+try {
+await cleanupExpired(pool);
+console.log('Expired records cleaned up (cron)');
+} catch (err) {
+console.error('Scheduled cleanup error:', err);
+}
 });
 
 //app.listen(3000, () => console.log('Server running on http://localhost:3000'));
