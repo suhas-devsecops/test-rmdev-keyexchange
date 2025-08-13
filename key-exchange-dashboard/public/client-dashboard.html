@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Key Exchange - Client Dashboard</title>
+    <!-- CryptoJS for decryption -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-image: linear-gradient(to right, #ffb0d9, #b0cfff); margin: 0; padding: 20px; position: relative;}
+        .header { text-align: center; padding: 20px; background-color: #704264; color: white; margin-bottom: 20px; }
+        .main-container { max-width: 1200px; margin: 0 auto; background-color: white; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); overflow: hidden; }
+        .tab-container { display: flex; border-bottom: 1px solid #ebd383; background-color: #a9a9a9; padding: 5px 10px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+        .tab { padding: 10px 20px; background-color: #cbcdcf; border: 1px solid #ddd; border-bottom: none; border-top-left-radius: 8px; border-top-right-radius: 8px; cursor: pointer; margin-right: 5px; transition: background-color 0.3s, box-shadow 0.3s; }
+        .tab:hover { background-color: #e9ecef; }
+        .tab.active { background-color: #cea7a7; box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05); border-bottom: 2px solid #ebd383; z-index: 1; }
+        .content-area { padding: 20px; }
+        .content-area h3 { margin-top: 0; }
+        form { display: flex; flex-direction: column; }
+        label { margin-bottom: 5px; }
+        input { margin-bottom: 15px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button[type="submit"] { padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button[type="submit"]:hover { background-color: #218838; }
+        .error { color: red; }
+        table { table-layout: fixed; width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table th, table td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; white-space: normal; max-width: 150px; }
+        table th { background-color: #f2f2f2; font-weight: bold; }
+        table tr:nth-child(even) { background-color: #f9f9f9; }
+        table tr:hover { background-color: #f1f1f1; }
+        .public-key-cell { align-items: center; gap: 6px; padding: 0 !important; white-space: nowrap; }
+        .view-btn { background: none; border: none; cursor: pointer; color: #007bff; font-size: 14px; padding: 0 2px; margin: 0; line-height: 1; white-space: nowrap; }
+        .view-btn:hover { color: #0056b3; text-decoration: underline; }
+        .masked { color: #666; }
+        .refresh-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: #007bff; margin-left: 10px; vertical-align: middle; }
+        .refresh-btn:hover { color: #0056b3; }
+        #decryptedContent { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; white-space: pre-wrap; word-wrap: break-word; }
+        .scrollable-key { max-width: 150px; overflow-x: auto; white-space: nowrap; display: inline-block; vertical-align: middle; padding: 4px 0; }
+        .file-upload-container { display: flex; align-items: center; margin-bottom: 15px; }
+        #clearFile { margin-left: 10px; padding: 8px 12px; background-color: #bcb6b6; color: rgb(43, 43, 43); border: none; border-radius: 4px; cursor: pointer; }
+        #clearFile:hover { background-color: #a2a2a2; color: #dd4b11;}
+        .logout-btn {
+    position: absolute;
+    top: 30px;        /* Adjust as needed for vertical position */
+    right: 30px;      /* Adjust as needed for horizontal position */
+    padding: 6px 18px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 16px;
+    z-index: 2;
+}
+.logout-btn:hover {
+    background-color: #c82333;
+}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Welcome to Client Dashboard, [Client User]!</h2>
+        <p>You're logged in. Select a tab below to get started.</p>
+        <button class="logout-btn" id="logoutBtn">Logout</button>  <!-- Logout button in header -->
+    </div>
+
+    <div class="main-container">
+        <div class="tab-container">
+            <div class="tab" id="submitRequestTab">Submit Request</div>
+            <div class="tab" id="submittedRequestsTab">Submitted Requests</div>
+            <div class="tab" id="decryptFileTab">Decrypt File</div>
+        </div>
+        <div class="content-area" id="contentArea">
+            <p>Select a tab above to view content.</p>
+        </div>
+    </div>
+
+    <script>
+        const contentArea = document.getElementById('contentArea');
+        const submitRequestTab = document.getElementById('submitRequestTab');
+        const submittedRequestsTab = document.getElementById('submittedRequestsTab');
+        const decryptFileTab = document.getElementById('decryptFileTab');
+        const backendUrl = 'http://172.174.230.197:3000';
+        
+        (function(){
+  const isLoggedIn = localStorage.getItem('clientLoggedIn') === 'true';
+  if (!isLoggedIn) {
+    window.location.replace('client-login.html');
+  }
+})();
+
+const CLIENT_INACTIVITY_MS = 60 * 60 * 1000; // 1 hour
+
+function clientMarkActivity(){
+  localStorage.setItem('clientLastActivity', Date.now().toString());
+}
+
+function clientLogout(reason="inactivity"){
+  localStorage.removeItem('clientLoggedIn');
+  localStorage.removeItem('clientLastActivity');
+  if(reason === 'inactivity') alert("Auto-logged out after 1 hour of inactivity.");
+  window.location.replace('client-login.html');
+}
+
+// Mark activity on any interaction
+['click','keydown','mousemove','scroll','touchstart'].forEach(evt => {
+  document.addEventListener(evt, clientMarkActivity, {passive:true});
+});
+
+// Initial mark
+clientMarkActivity();
+
+// Check inactivity every minute
+setInterval(()=>{
+  const last = parseInt(localStorage.getItem('clientLastActivity') || '0',10);
+  if(last && (Date.now()-last >= CLIENT_INACTIVITY_MS)){
+    clientLogout();
+  }
+}, 60000);
+
+
+        function setActiveTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+        }
+
+        function loadSubmitForm() {
+            contentArea.innerHTML = `
+                <h3>Submit Request</h3>
+                <form id="requestForm">
+                    <label for="fullname">Full Name:</label>
+                    <input type="text" id="fullname" name="fullname" required>
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" required>
+                    <label for="contact">Contact:</label>
+                    <input type="tel" id="contact" name="contact" required>
+                    <label for="wireguardkey">WireGuard Key:</label>
+                    <div style="position: relative;">
+                        <input type="password" id="wireguardkey" name="wireguardkey" required style="width: 100%; padding-right: 60px;">
+                        <button type="button" id="toggleWireguardKey" class="view-btn" aria-label="Show WireGuard key" style="position: absolute; right: 8px; top: 8px;">Show</button>
+                    </div>
+                    <label for="pgpkey">PGP Key:</label>
+                    <div style="position: relative;">
+                        <input type="password" id="pgpkey" name="pgpkey" style="width: 100%; padding-right: 60px;">
+                        <button type="button" id="togglePgpKey" class="view-btn" aria-label="Show PGP key" style="position: absolute; right: 8px; top: 8px;">Show</button>
+                    </div>
+                    <button type="submit">Submit</button>
+                </form>
+                <p class="error" id="errorMessage"></p>
+            `;
+
+            const form = document.getElementById('requestForm');
+            const errorMessage = document.getElementById('errorMessage');
+            const wireguardKeyInput = document.getElementById('wireguardkey');
+            const toggleWireguardKeyBtn = document.getElementById('toggleWireguardKey');
+            const pgpKeyInput = document.getElementById('pgpkey');
+            const togglePgpKeyBtn = document.getElementById('togglePgpKey');
+
+            toggleWireguardKeyBtn.addEventListener('click', function () {
+                if (wireguardKeyInput.type === 'password') {
+                    wireguardKeyInput.type = 'text';
+                    this.textContent = 'Hide';
+                } else {
+                    wireguardKeyInput.type = 'password';
+                    this.textContent = 'Show';
+                }
+            });
+
+            togglePgpKeyBtn.addEventListener('click', function () {
+                if (pgpKeyInput.type === 'password') {
+                    pgpKeyInput.type = 'text';
+                    this.textContent = 'Hide';
+                } else {
+                    pgpKeyInput.type = 'password';
+                    this.textContent = 'Show';
+                }
+            });
+
+            form.addEventListener('submit', async function (event) {
+                event.preventDefault();
+                const fullname = document.getElementById('fullname').value;
+                const email = document.getElementById('email').value;
+                const contact = document.getElementById('contact').value;
+                const wireguardkey = document.getElementById('wireguardkey').value;
+                const pgpkey = document.getElementById('pgpkey').value;
+
+                if (fullname === '' || email === '' || contact === '' || wireguardkey === '') {
+                    errorMessage.textContent = 'Please fill in all required fields.';
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${backendUrl}/submit-request`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fullname, email, contact, wireguardkey, pgpkey })
+                    });
+                    if (response.ok) {
+                        alert('Request submitted successfully!');
+                        form.reset();
+                        errorMessage.textContent = '';
+                        toggleWireguardKeyBtn.textContent = 'Show';
+                        togglePgpKeyBtn.textContent = 'Show';
+                    } else {
+                        const errorData = await response.json();
+                        errorMessage.textContent = errorData.error || 'Error submitting request.';
+                        console.error('Submission failed:', response.status, errorData);
+                    }
+                } catch (err) {
+                    console.error('Network error during submission:', err);
+                    errorMessage.textContent = 'Network error. Check if the server is running.';
+                }
+            });
+        }
+
+        async function loadSubmittedRequests() {
+            contentArea.innerHTML = '<h3>Submitted Requests <button id="refreshBtn" class="refresh-btn" title="Refresh">↻</button></h3><div id="tableContainer"><p>Loading...</p></div>';
+
+            try {
+                const response = await fetch(`${backendUrl}/submitted-requests`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const submissions = await response.json();
+                let tableHTML = '<table><thead><tr><th>Full Name</th><th>Email</th><th>Contact</th><th>WireGuard Key</th><th>PGP Key</th><th>Status</th><th>Submitted</th><th>Updated</th></tr></thead><tbody>';
+                submissions.forEach((sub, index) => {
+                    let statusText = sub.status;
+                    let updatedText = sub.updated_timestamp ? `${statusText} at: ${sub.updated_timestamp}` : 'N/A';
+                    tableHTML += `
+                        <tr>
+                            <td>${sub.fullname}</td>
+                            <td>${sub.email}</td>
+                            <td>${sub.contact}</td>
+                            <td class="public-key-cell"><div class="scrollable-key"><span id="wireguardKey-${index}" class="masked">••••••••</span></div><button class="view-btn" data-index="${index}" data-key="${sub.wireguardkey}">Show</button></td>
+                            <td class="public-key-cell"><div class="scrollable-key"><span id="pgpKey-${index}" class="masked">••••••••</span></div><button class="view-btn" data-index="${index}" data-key="${sub.pgpkey || 'N/A'}">Show</button></td>
+                            <td>${statusText}</td>
+                            <td>${sub.timestamp}</td>
+                            <td>${updatedText}</td>
+                        </tr>
+                    `;
+                });
+                tableHTML += '</tbody></table>';
+                document.getElementById('tableContainer').innerHTML = (submissions.length === 0 ? '<p>No submissions yet.</p>' : tableHTML);
+
+                // Toggle view for public key
+                document.querySelectorAll('.view-btn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const index = this.getAttribute('data-index');
+                        const fullKey = this.getAttribute('data-key');
+                        const keySpan = document.getElementById(btn.parentNode.querySelector('span').id);
+                        if (keySpan.textContent === '••••••••') {
+                            keySpan.textContent = fullKey;
+                            keySpan.classList.remove('masked');
+                            this.textContent = 'Hide';
+                        } else {
+                            keySpan.textContent = '••••••••';
+                            keySpan.classList.add('masked');
+                            this.textContent = 'Show';
+                        }
+                    });
+                });
+
+                // Refresh button
+                document.getElementById('refreshBtn').addEventListener('click', loadSubmittedRequests);
+            } catch (err) {
+                console.error('Error loading submitted requests:', err);
+                document.getElementById('tableContainer').innerHTML = '<p>Error loading data: ' + err.message + '. Check console for details.</p>';
+            }
+        }
+
+        function loadDecryptFile() {
+            contentArea.innerHTML = `
+                <h3>Decrypt File</h3>
+                <form id="decryptForm">
+                    <label for="encryptedFile">Upload Encrypted File:</label>
+                    <div class="file-upload-container">
+                        <input type="file" id="encryptedFile" required>
+                        <button type="button" id="clearFile">Clear</button>
+                    </div>
+                    <label for="wireguardKey">Enter Your WireGuard Key (Password):</label>
+                    <input type="password" id="wireguardKey" required>
+                    <button type="submit">Decrypt</button>
+                </form>
+                <div id="decryptedContent" style="display: none;"></div>
+                <p id="decryptStatus" class="error"></p>
+            `;
+
+            const form = document.getElementById('decryptForm');
+            form.addEventListener('submit', async function (event) {
+                event.preventDefault();
+                const fileInput = document.getElementById('encryptedFile');
+                const wireguardKey = document.getElementById('wireguardKey').value.trim();
+                const status = document.getElementById('decryptStatus');
+                const contentDiv = document.getElementById('decryptedContent');
+
+                if (!fileInput.files.length || !wireguardKey) {
+                    status.textContent = 'Please upload a file and enter your WireGuard key.';
+                    return;
+                }
+
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                    try {
+                        const fileContent = e.target.result;
+                        const decryptedText = decryptAES(fileContent, wireguardKey);
+                        contentDiv.textContent = decryptedText;
+                        contentDiv.style.display = 'block';
+                        status.textContent = 'File decrypted successfully!';
+                    } catch (error) {
+                        status.textContent = 'Error during decryption: ' + error.message;
+                    }
+                };
+
+                reader.onerror = function () {
+                    status.textContent = 'Error reading file.';
+                };
+
+                reader.readAsText(file);
+            });
+
+            // Clear button functionality
+            document.getElementById('clearFile').addEventListener('click', function () {
+                document.getElementById('encryptedFile').value = '';
+                document.getElementById('decryptedContent').style.display = 'none';
+                document.getElementById('decryptStatus').textContent = '';
+            });
+        }
+
+        // Decryption function (matches backend AES-256-CBC with PBKDF2)
+        function decryptAES(fileContent, password) {
+            const lines = fileContent.trim().split('\n');
+            if (lines.length < 3) {
+                throw new Error('Invalid encrypted file format. Expected Salt, IV, and Encrypted lines.');
+            }
+
+            const saltHex = lines[0].split(': ')[1].trim();
+            const ivHex = lines[1].split(': ')[1].trim();
+            const ciphertextHex = lines[2].split(': ')[1].trim();
+
+            const salt = CryptoJS.enc.Hex.parse(saltHex);
+            const iv = CryptoJS.enc.Hex.parse(ivHex);
+            const ciphertext = CryptoJS.enc.Hex.parse(ciphertextHex);
+
+            // Derive key using PBKDF2 (matches backend: 100000 iterations, SHA256, 256-bit key)
+            const derivedKey = CryptoJS.PBKDF2(password, salt, {
+                keySize: 8,  // 256 bits
+                iterations: 100000,
+                hasher: CryptoJS.algo.SHA256
+            });
+
+            // Decrypt AES-256-CBC with PKCS7 padding
+            const decrypted = CryptoJS.AES.decrypt(
+                { ciphertext: ciphertext },
+                derivedKey,
+                { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
+            );
+
+            const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
+            if (!plaintext) {
+                throw new Error('Decryption failed - incorrect WireGuard key or corrupted file.');
+            }
+            return plaintext;
+        }
+
+        submitRequestTab.addEventListener('click', () => {
+            setActiveTab(submitRequestTab);
+            loadSubmitForm();
+        });
+
+        submittedRequestsTab.addEventListener('click', () => {
+            setActiveTab(submittedRequestsTab);
+            loadSubmittedRequests();
+        });
+
+        decryptFileTab.addEventListener('click', () => {
+            setActiveTab(decryptFileTab);
+            loadDecryptFile();
+        });
+
+        // Load default view
+        setActiveTab(submitRequestTab);
+        loadSubmitForm();
+
+        // Logout button functionality
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to log out?')) {
+                // Clear storage (simulate logout)
+                localStorage.clear();
+                sessionStorage.clear();
+                // Redirect to login page (adjust URL as needed)
+                window.location.href = 'client-login.html';  // Or your client login page
+            }
+        });
+    </script>
+</body>
+</html>

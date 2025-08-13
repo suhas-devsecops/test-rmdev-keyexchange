@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Key Exchange</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .home-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            text-align: center;
+        }
+        h2 {
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px;
+            margin: 10px 0;
+            width: 100%;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+        }
+        #clientBtn {
+            background-color: #007bff;
+        }
+        #clientBtn:hover {
+            background-color: #0056b3;
+        }
+        #serverBtn {
+            background-color: #ffc107;
+        }
+        #serverBtn:hover {
+            background-color: #e0a800;
+        }
+        #adminBtn {
+            background-color: #28a745;
+        }
+        #adminBtn:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="home-container">
+        <h2>Welcome to Web Key Exchange</h2>
+        <p>Choose your login type:</p>
+        <button id="clientBtn">Login as Client</button>
+        <button id="serverBtn">Client SignUp</button>
+        <button id="adminBtn">Login as Admin</button>
+    </div>
+
+    <script>
+        document.getElementById('clientBtn').addEventListener('click', function() {
+            window.location.href = 'client-login.html';
+        });
+        document.getElementById('serverBtn').addEventListener('click', function() {
+            window.location.href = 'client-signup.html';
+        });
+        document.getElementById('adminBtn').addEventListener('click', function() {
+            window.location.href = 'admin-login.html';
+        });
+    </script>
+</body>
+</html>

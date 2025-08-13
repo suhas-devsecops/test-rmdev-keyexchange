@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Key Exchange - Admin Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-image: linear-gradient(to right, #ffb0d9, #b0cfff); margin: 0; padding: 20px; position: relative;}
+        .header { text-align: center; padding: 20px; background-color: #704264; color: white; margin-bottom: 20px; }
+        .main-container { max-width: 1200px; margin: 0 auto; background-color: white; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); overflow: hidden; }
+        .tab-container { display: flex; border-bottom: 1px solid #ebd383; background-color: #a9a9a9; padding: 5px 10px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+        .tab { padding: 10px 20px; background-color: #cbcdcf; border: 1px solid #ddd; border-bottom: none; border-top-left-radius: 8px; border-top-right-radius: 8px; cursor: pointer; margin-right: 5px; transition: background-color 0.3s, box-shadow 0.3s; }
+        .tab:hover { background-color: #e9ecef; }
+        .tab.active { background-color: #cea7a7; box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05); border-bottom: 2px solid #ebd383; z-index: 1; }
+        .content-area { padding: 20px; }
+        .content-area h3 { margin-top: 0; }
+        .sub-options { margin-bottom: 15px; }
+        .sub-btn { padding: 8px 16px; background-color: #cbcdcf; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; }
+        .sub-btn.active { background-color: #cea7a7; color: white; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table th, table td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+        table th { background-color: #f2f2f2; font-weight: bold; }
+        table tr:nth-child(even) { background-color: #f9f9f9; }
+        table tr:hover { background-color: #f1f1f1; }
+        .action-btn { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; margin-right: 5px; }
+        .approve-btn { background-color: #28a745; color: white; }
+        .cancel-btn { background-color: #dc3545; color: white; }
+        .masked { color: #666; }
+        .view-btn { background: none; border: none; cursor: pointer; color: #007bff; font-size: 14px; padding: 0 2px; margin: 0; line-height: 1; white-space: nowrap; }
+        .view-btn:hover { color: #0056b3; text-decoration: underline; }
+        .public-key-cell { align-items: center; gap: 6px; padding: 0 !important; white-space: nowrap; }
+        .refresh-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: #007bff; margin-left: 10px; vertical-align: middle; }
+        .refresh-btn:hover { color: #0056b3; }
+        .share-btn { background-color: #007bff; color: white; }
+        .share-all-btn { padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        .share-all-btn:hover { background-color: #0056b3; }
+        .scrollable-key { max-width: 150px; overflow-x: auto; white-space: nowrap; display: inline-block; vertical-align: middle; padding: 4px 0; }
+        .reset-btn {padding: 6px 12px; background-color: #ffc107; color: white; border: none; border-radius: 4px; cursor: pointer;}
+        .reset-btn:hover { background-color: #e0a800;}
+        .delete-btn { background-color: #dc3545; color: white; }
+        .delete-btn:hover { background-color: #c82333; }
+        .approve-btn:hover { background-color: #218838; }
+        /* Logout button style */
+        .logout-btn {
+    position: absolute;
+    top: 30px;        /* Adjust as needed for vertical position */
+    right: 30px;      /* Adjust as needed for horizontal position */
+    padding: 6px 18px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 16px;
+    z-index: 2;
+}
+.logout-btn:hover {
+    background-color: #c82333;
+}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Welcome to Admin Dashboard</h2>
+        <p>Select a tab below to manage requests and users.</p>
+        <button class="logout-btn" id="logoutBtn">Logout</button>  <!-- Added logout button -->
+    </div>
+    <div class="main-container">
+        <div class="tab-container">
+            <div class="tab" id="pendingRequestsTab">Pending Requests</div>
+            <div class="tab" id="completedRequestsTab">Completed Requests</div>
+            <div class="tab" id="keyExchangeTab">KeyExchange</div>
+            <div class="tab" id="clientUsersTab">Client Users</div> 
+            <div class="tab" id="adminUsersTab">Admin Users</div>
+        </div>
+        <div class="content-area" id="contentArea">
+            <p>Select a tab above to view content.</p>
+        </div>
+    </div>
+
+    <script>
+        const contentArea = document.getElementById('contentArea');
+        const pendingRequestsTab = document.getElementById('pendingRequestsTab');
+        const completedRequestsTab = document.getElementById('completedRequestsTab');
+        const keyExchangeTab = document.getElementById('keyExchangeTab');
+        const clientUsersTab = document.getElementById('clientUsersTab');
+        const backendUrl = 'http://172.174.230.197:3000';
+        
+        (function(){
+  const isLoggedIn = localStorage.getItem('adminLoggedIn') === 'true';
+  if (!isLoggedIn) {
+    window.location.replace('admin-login.html');
+  }
+})();
+
+const ADMIN_INACTIVITY_MS = 60 * 60 * 1000; // 1 hour
+
+function adminMarkActivity(){
+  localStorage.setItem('adminLastActivity', Date.now().toString());
+}
+
+function adminLogout(reason="inactivity"){
+  localStorage.removeItem('adminLoggedIn');
+  localStorage.removeItem('adminLastActivity');
+  if(reason === 'inactivity') alert("Auto-logged out after 1 hour of inactivity.");
+  window.location.replace('admin-login.html');
+}
+
+['click','keydown','mousemove','scroll','touchstart'].forEach(evt => {
+  document.addEventListener(evt, adminMarkActivity, {passive:true});
+});
+
+adminMarkActivity();
+
+setInterval(()=>{
+  const last = parseInt(localStorage.getItem('adminLastActivity') || '0',10);
+  if(last && (Date.now()-last >= ADMIN_INACTIVITY_MS)){
+    adminLogout();
+  }
+}, 60000);
+
+
+        function setActiveTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+        }
+
+        // Load Pending Requests
+        async function loadPendingRequests() {
+            contentArea.innerHTML = '<h3>Pending Requests <button id="refreshBtn" class="refresh-btn" title="Refresh">↻</button></h3><div id="tableContainer"><p>Loading...</p></div>';
+
+            try {
+                const response = await fetch(`${backendUrl}/pending-requests`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const requests = await response.json();
+                let tableHTML = '<table><thead><tr><th>Full Name</th><th>Email</th><th>Contact</th><th>WireGuard Key</th><th>PGP Key</th><th>Submitted at</th><th>Action</th></tr></thead><tbody>';
+                requests.forEach((req, index) => {
+                    tableHTML += `
+                        <tr>
+                            <td>${req.fullname}</td>
+                            <td>${req.email}</td>
+                            <td>${req.contact}</td>
+                            <td class="public-key-cell"><div class="scrollable-key"><span id="wireguardKey-${index}" class="masked">••••••••</span></div><button class="view-btn" data-index="${index}" data-key="${req.wireguardkey}">Show</button></td>
+                            <td class="public-key-cell"><div class="scrollable-key"><span id="pgpKey-${index}" class="masked">••••••••</span></div><button class="view-btn" data-index="${index}" data-key="${req.pgpkey || 'N/A'}">Show</button></td>
+                            <td>${req.timestamp}</td>
+                            <td>
+                                <button class="action-btn approve-btn" data-id="${req.id}">Approve</button>
+                                <button class="action-btn cancel-btn" data-id="${req.id}">Cancel</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                tableHTML += '</tbody></table>';
+                document.getElementById('tableContainer').innerHTML = (requests.length === 0 ? '<p>No pending requests.</p>' : tableHTML);
+
+                // Toggle view for public key
+                document.querySelectorAll('.view-btn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const index = this.getAttribute('data-index');
+                        const fullKey = this.getAttribute('data-key');
+                        const keySpan = document.getElementById(btn.parentNode.querySelector('span').id);
+                        if (keySpan.textContent === '••••••••') {
+                            keySpan.textContent = fullKey;
+                            keySpan.classList.remove('masked');
+                            this.textContent = 'Hide';
+                        } else {
+                            keySpan.textContent = '••••••••';
+                            keySpan.classList.add('masked');
+                            this.textContent = 'Show';
+                        }
+                    });
+                });
+
+                // Action buttons
+                document.querySelectorAll('.approve-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const id = btn.getAttribute('data-id');
+                        await fetch(`${backendUrl}/approve-request/${id}`, { method: 'POST' });
+                        loadPendingRequests(); // Refresh tab
+                    });
+                });
+                document.querySelectorAll('.cancel-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const id = btn.getAttribute('data-id');
+                        await fetch(`${backendUrl}/cancel-request/${id}`, { method: 'POST' });
+                        loadPendingRequests(); // Refresh tab
+                    });
+                });
+
+                // Refresh button
+                document.getElementById('refreshBtn').addEventListener('click', loadPendingRequests);
+            } catch (err) {
+                console.error('Error loading pending requests:', err);
+                document.getElementById('tableContainer').innerHTML = '<p>Error loading data: ' + err.message + '. Check console for details.</p>';
+            }
+        }
+
+
+        async function loadClientUsers() {
+  const response = await fetch(`${backendUrl}/clients`);
+  const users = await response.json();
+  let tableHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Full Name</th>
+          <th>Email</th>
+          <th>Contact</th>
+          <th>Project/Team</th>
+          <th>Status</th>
+          <th>Submitted</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${users.map(user => `
+          <tr data-client-id="${user.id}">
+            <td>${user.fullname}</td>
+            <td>${user.email}</td>
+            <td>${user.contact}</td>
+            <td>${user.project || ''}</td>
+            <td>${user.status}</td>
+            <td>${user.timestamp}</td>
+            <td>
+              <button class="reset-btn" data-id="${user.id}">Reset</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  document.getElementById('tableContainer').innerHTML = tableHTML;
+
+  // Attach event handlers for reset buttons
+  document.querySelectorAll('.reset-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const clientId = this.getAttribute('data-id');
+      const resp = await fetch(`${backendUrl}/admin/reset-password/${clientId}`, { method: 'POST' });
+      if (resp.ok) {
+        alert('Password reset email sent!');
+      } else {
+        const err = await resp.json();
+        alert('Failed to send reset email: ' + (err.error || 'Unknown error'));
+      }
+    });
+  });
+}
+
+
+
+
+        async function loadCompletedRequests() {
+            contentArea.innerHTML = '<h3>Completed Requests <button id="refreshBtn" class="refresh-btn" title="Refresh">↻</button></h3><div id="tableContainer"><p>Loading...</p></div>';
+
+            try {
+                const response = await fetch(`${backendUrl}/completed-requests`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const requests = await response.json();
+                let tableHTML = '<table><thead><tr><th>Full Name</th><th>Email</th><th>Contact</th><th>WireGuard Key</th><th>PGP Key</th><th>Status</th><th>Submitted at</th><th>Updated</th></tr></thead><tbody>';
+                requests.forEach((req, index) => {
+                    tableHTML += `
+                        <tr>
+                            <td>${req.fullname}</td>
+                            <td>${req.email}</td>
+                            <td>${req.contact}</td>
+                            <td class="public-key-cell"><div class="scrollable-key"><span id="wireguardKeyCompleted-${index}" class="masked">••••••••</span></div><button class="view-btn" data-index="${index}" data-key="${req.wireguardkey}">Show</button></td>
+                            <td class="public-key-cell"><div class="scrollable-key"><span id="pgpKeyCompleted-${index}" class="masked">••••••••</span></div><button class="view-btn" data-index="${index}" data-key="${req.pgpkey || 'N/A'}">Show</button></td>
+                            <td>${req.status}</td>
+                            <td>${req.timestamp}</td>
+                            <td>${req.updated_timestamp || 'N/A'}</td>
+                        </tr>
+                    `;
+                });
+                tableHTML += '</tbody></table>';
+                document.getElementById('tableContainer').innerHTML = (requests.length === 0 ? '<p>No completed requests yet.</p>' : tableHTML);
+
+                // Toggle view for public key
+                document.querySelectorAll('.view-btn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const index = this.getAttribute('data-index');
+                        const fullKey = this.getAttribute('data-key');
+                        const keySpan = document.getElementById(btn.parentNode.querySelector('span').id);
+                        if (keySpan.textContent === '••••••••') {
+                            keySpan.textContent = fullKey;
+                            keySpan.classList.remove('masked');
+                            this.textContent = 'Hide';
+                        } else {
+                            keySpan.textContent = '••••••••';
+                            keySpan.classList.add('masked');
+                            this.textContent = 'Show';
+                        }
+                    });
+                });
+
+                // Refresh button
+                document.getElementById('refreshBtn').addEventListener('click', loadCompletedRequests);
+            } catch (err) {
+                console.error('Error loading completed requests:', err);
+                document.getElementById('tableContainer').innerHTML = '<p>Error loading data: ' + err.message + '. Check console for details.</p>';
+            }
+        }
+
+        async function loadKeyExchange() {
+            contentArea.innerHTML = '<h3>KeyExchange <button id="refreshBtn" class="refresh-btn" title="Refresh">↻</button></h3><div id="tableContainer"><p>Loading...</p></div>';
+
+            try {
+                const response = await fetch(`${backendUrl}/approved-users`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const users = await response.json();
+                let tableHTML = '<table><thead><tr><th>Select</th><th>Full Name</th><th>Email</th><th>WireGuard Key</th><th>PGP Key</th><th>Approved At</th></tr></thead><tbody>';
+                users.forEach((user, index) => {
+                    tableHTML += `
+                        <tr>
+                            <td><input type="checkbox" class="user-select" data-id="${user.id}"></td>
+                            <td>${user.fullname}</td>
+                            <td>${user.email}</td>
+                            <td class="public-key-cell"><div class="scrollable-key"><span id="wireguardKeyEx-${index}" class="masked">••••••••</span></div><button class="view-btn" data-index="${index}" data-key="${user.wireguardkey}">Show</button></td>
+                            <td class="public-key-cell"><div class="scrollable-key"><span id="pgpKeyEx-${index}" class="masked">••••••••</span></div><button class="view-btn" data-index="${index}" data-key="${user.pgpkey || 'N/A'}">Show</button></td>
+                            <td>${user.updated_timestamp || 'N/A'}</td>
+                        </tr>
+                    `;
+                });
+                tableHTML += '</tbody></table><button class="share-all-btn">Share Server Key to Selected</button>';
+                document.getElementById('tableContainer').innerHTML = (users.length === 0 ? '<p>No approved users yet.</p>' : tableHTML);
+
+                // Toggle view for public key
+                document.querySelectorAll('.view-btn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const index = this.getAttribute('data-index');
+                        const fullKey = this.getAttribute('data-key');
+                        const keySpan = document.getElementById(btn.parentNode.querySelector('span').id);
+                        if (keySpan.textContent === '••••••••') {
+                            keySpan.textContent = fullKey;
+                            keySpan.classList.remove('masked');
+                            this.textContent = 'Hide';
+                        } else {
+                            keySpan.textContent = '••••••••';
+                            keySpan.classList.add('masked');
+                            this.textContent = 'Show';
+                        }
+                    });
+                });
+
+                // Share all button
+                document.querySelector('.share-all-btn').addEventListener('click', async () => {
+                    const selectedIds = [];
+                    document.querySelectorAll('.user-select:checked').forEach(checkbox => {
+                        selectedIds.push(checkbox.getAttribute('data-id'));
+                    });
+                    if (selectedIds.length === 0) {
+                        alert('Please select at least one user.');
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch(`${backendUrl}/share-key`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userIds: selectedIds })
+                        });
+                        if (response.ok) {
+                            alert('Server public key shared successfully to selected users!');
+                            loadKeyExchange(); // Refresh tab
+                        } else {
+                            alert('Error sharing key.');
+                        }
+                    } catch (err) {
+                        alert('Network error while sharing key.');
+                    }
+                });
+
+                // Refresh button
+                document.getElementById('refreshBtn').addEventListener('click', loadKeyExchange);
+            } catch (err) {
+                console.error('Error loading key exchange:', err);
+                document.getElementById('tableContainer').innerHTML = '<p>Error loading data: ' + err.message + '. Check console for details.</p>';
+            }
+        }
+
+        // Load Client Users with sub-options
+        function loadClientUsers() {
+            contentArea.innerHTML = `
+                <h3>Client Users</h3>
+                <div class="sub-options">
+                    <button class="sub-btn active" id="allClientUsersBtn">All Client Users</button>
+                    <button class="sub-btn" id="approveClientUsersBtn">Approve Client Users</button>
+                </div>
+                <div id="clientUsersTable"><p>Loading...</p></div>
+            `;
+
+            const allBtn = document.getElementById('allClientUsersBtn');
+            const approveBtn = document.getElementById('approveClientUsersBtn');
+
+            allBtn.addEventListener('click', () => {
+                allBtn.classList.add('active');
+                approveBtn.classList.remove('active');
+                loadAllClientUsers();
+            });
+
+            approveBtn.addEventListener('click', () => {
+                approveBtn.classList.add('active');
+                allBtn.classList.remove('active');
+                loadApproveClientUsers();
+            });
+
+            // Load All Client Users by default
+            loadAllClientUsers();
+        }
+
+        // Load All Client Users (with Reset and Delete buttons)
+        async function loadAllClientUsers() {
+            const tableContainer = document.getElementById('clientUsersTable');
+            tableContainer.innerHTML = '<p>Loading all client users...</p>';
+
+            try {
+                const response = await fetch(`${backendUrl}/clients`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const clients = await response.json();
+                let tableHTML = '<table><thead><tr><th>Full Name</th><th>Email</th><th>Contact</th><th>Project</th><th>Status</th><th>Submitted</th><th>Action</th></tr></thead><tbody>';
+                clients.forEach(client => {
+                    tableHTML += `
+                        <tr>
+                            <td>${client.fullname}</td>
+                            <td>${client.email}</td>
+                            <td>${client.contact}</td>
+                            <td>${client.project || 'N/A'}</td>
+                            <td>${client.status}</td>
+                            <td>${client.timestamp}</td>
+                            <td>
+                                <button class="action-btn reset-btn" data-id="${client.id}">Reset</button>
+                                <button class="action-btn delete-btn" data-id="${client.id}">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                tableHTML += '</tbody></table>';
+                tableContainer.innerHTML = (clients.length === 0 ? '<p>No client users yet.</p>' : tableHTML);
+
+                // Add click event for reset buttons
+                document.querySelectorAll('.reset-btn').forEach(btn => {
+                    btn.addEventListener('click', async function () {
+                        const clientId = this.getAttribute('data-id');
+                        try {
+                            const response = await fetch(`${backendUrl}/reset-client-password/${clientId}`, {
+                                method: 'POST'
+                            });
+                            if (response.ok) {
+                                alert('Reset link sent to client user!');
+                            } else {
+                                const errorData = await response.json();
+                                alert(errorData.error || 'Error sending reset link.');
+                            }
+                        } catch (err) {
+                            console.error('Reset error:', err);
+                            alert('Network error. Check console for details.');
+                        }
+                    });
+                });
+
+                // Add click event for delete buttons
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', async function () {
+                        const clientId = this.getAttribute('data-id');
+                        if (confirm('Are you sure you want to delete this client user?')) {
+                            try {
+                                const response = await fetch(`${backendUrl}/delete-client/${clientId}`, {
+                                    method: 'DELETE'
+                                });
+                                if (response.ok) {
+                                    alert('Client user deleted successfully!');
+                                    loadAllClientUsers();  // Reload the list
+                                } else {
+                                    const errorData = await response.json();
+                                    alert(errorData.error || 'Error deleting client user.');
+                                }
+                            } catch (err) {
+                                console.error('Delete error:', err);
+                                alert('Network error. Check console for details.');
+                            }
+                        }
+                    });
+                });
+            } catch (err) {
+                console.error('Error loading client users:', err);
+                tableContainer.innerHTML = '<p>Error loading data: ' + err.message + '.</p>';
+            }
+        }
+
+        // Load Approve Client Users
+        async function loadApproveClientUsers() {
+            const tableContainer = document.getElementById('clientUsersTable');
+            tableContainer.innerHTML = '<p>Loading clients for approval...</p>';
+
+            try {
+                const response = await fetch(`${backendUrl}/pending-clients`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const pendingClients = await response.json();
+                let tableHTML = '<table><thead><tr><th>Full Name</th><th>Email</th><th>Contact</th><th>Project</th><th>Status</th><th>Submitted</th><th>Action</th></tr></thead><tbody>';
+                pendingClients.forEach(client => {
+                    tableHTML += `
+                        <tr>
+                            <td>${client.fullname}</td>
+                            <td>${client.email}</td>
+                            <td>${client.contact}</td>
+                            <td>${client.project || 'N/A'}</td>
+                            <td>${client.status}</td>
+                            <td>${client.timestamp}</td>
+                            <td><button class="action-btn approve-btn" data-id="${client.id}">Approve</button></td>
+                        </tr>
+                    `;
+                });
+                tableHTML += '</tbody></table>';
+                tableContainer.innerHTML = (pendingClients.length === 0 ? '<p>No clients awaiting approval.</p>' : tableHTML);
+
+                // Add click event for approve buttons
+                document.querySelectorAll('.approve-btn').forEach(btn => {
+                    btn.addEventListener('click', async function () {
+                        const clientId = this.getAttribute('data-id');
+                        try {
+                            const response = await fetch(`${backendUrl}/approve-client/${clientId}`, {
+                                method: 'POST'
+                            });
+                            if (response.ok) {
+                                alert('Client approved and email sent!');
+                                loadApproveClientUsers();  // Reload list
+                            } else {
+                                const errorData = await response.json();
+                                alert(errorData.error || 'Error approving client.');
+                            }
+                        } catch (err) {
+                            console.error('Approve error:', err);
+                            alert('Network error. Check console for details.');
+                        }
+                    });
+                });
+            } catch (err) {
+                console.error('Error loading pending clients:', err);
+                tableContainer.innerHTML = '<p>Error loading data: ' + err.message + '.</p>';
+            }
+        }
+
+
+
+        pendingRequestsTab.addEventListener('click', () => {
+            setActiveTab(pendingRequestsTab);
+            loadPendingRequests();
+        });
+
+        completedRequestsTab.addEventListener('click', () => {
+            setActiveTab(completedRequestsTab);
+            loadCompletedRequests();
+        });
+
+        keyExchangeTab.addEventListener('click', () => {
+            setActiveTab(keyExchangeTab);
+            loadKeyExchange();
+        });
+
+        clientUsersTab.addEventListener('click', () => {
+            setActiveTab(clientUsersTab);
+            loadClientUsers();
+        });
+        
+        // Load default view
+        setActiveTab(pendingRequestsTab);
+        loadPendingRequests();
+
+        // Logout button functionality
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to log out?')) {
+                // Clear storage (simulate logout)
+                localStorage.clear();
+                sessionStorage.clear();
+                // Redirect to login page (adjust URL as needed)
+                window.location.href = 'admin-login.html';  // Or your admin login page
+            }
+        });
+
+
+    const adminUsersTab = document.getElementById('adminUsersTab');
+
+    // Load Admin Users with sub-tabs
+    function loadAdminUsers() {
+        contentArea.innerHTML = `
+            <h3>Admin Users</h3>
+            <div class="sub-options">
+                <button class="sub-btn active" id="allAdminUsersBtn">All Admin Users</button>
+                <button class="sub-btn" id="addAdminBtn">Add Admin User</button>
+            </div>
+            <div id="adminUsersContent"><p>Loading...</p></div>
+        `;
+
+        const allBtn = document.getElementById('allAdminUsersBtn');
+        const addBtn = document.getElementById('addAdminBtn');
+
+        allBtn.addEventListener('click', () => {
+            allBtn.classList.add('active');
+            addBtn.classList.remove('active');
+            loadAllAdminUsers();
+        });
+
+        addBtn.addEventListener('click', () => {
+            addBtn.classList.add('active');
+            allBtn.classList.remove('active');
+            showAddAdminForm();
+        });
+
+        loadAllAdminUsers();
+    }
+
+    async function loadAllAdminUsers() {
+        const container = document.getElementById('adminUsersContent');
+        container.innerHTML = '<p>Loading admin users...</p>';
+        try {
+            const res = await fetch(`${backendUrl}/all-admins`);
+            const admins = await res.json();
+            let html = '<table><thead><tr><th>Full Name</th><th>Email</th><th>Team</th><th>Created</th><th>Action</th></tr></thead><tbody>';
+            admins.forEach(a => {
+                html += `
+                    <tr>
+                        <td>${a.fullname}</td>
+                        <td>${a.email}</td>
+                        <td>${a.team}</td>
+                        <td>${a.created_at || ''}</td>
+                        <td>
+                            <button class="action-btn reset-btn" data-id="${a.id}">Reset</button>
+                            <button class="action-btn delete-btn" data-id="${a.id}">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = admins.length ? html : '<p>No admin users yet.</p>';
+
+            container.querySelectorAll('.reset-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.getAttribute('data-id');
+                    const resp = await fetch(`${backendUrl}/reset-admin-password/${id}`, { method: 'POST' });
+                    const data = await resp.json();
+                    alert(data.message || data.error);
+                });
+            });
+
+            container.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.getAttribute('data-id');
+                    if (confirm('Delete this admin?')) {
+                        const resp = await fetch(`${backendUrl}/delete-admin/${id}`, { method: 'DELETE' });
+                        const data = await resp.json();
+                        alert(data.message || data.error);
+                        loadAllAdminUsers();
+                    }
+                });
+            });
+        } catch (err) {
+            console.error(err);
+            container.innerHTML = `<p>Error loading admins: ${err.message}</p>`;
+        }
+    }
+
+    function showAddAdminForm() {
+        const container = document.getElementById('adminUsersContent');
+        container.innerHTML = `
+            <form id="addAdminForm">
+                <label>Full Name:</label><br>
+                <input type="text" name="fullname" required><br><br>
+                <label>Email:</label><br>
+                <input type="email" name="email" required><br><br>
+                <label>Team:</label><br>
+                <input type="text" name="team" required><br><br>
+                <button type="submit" class="action-btn approve-btn">Create Admin</button>
+            </form>
+            <div id="addAdminMsg" style="margin-top:10px;"></div>
+        `;
+
+        document.getElementById('addAdminForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const form = e.target;
+            const payload = {
+                fullname: form.fullname.value.trim(),
+                email: form.email.value.trim(),
+                team: form.team.value.trim()
+            };
+            const msg = document.getElementById('addAdminMsg');
+            msg.textContent = 'Processing...';
+            const res = await fetch(`${backendUrl}/add-admin`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                msg.style.color = 'green';
+                msg.textContent = data.message;
+                form.reset();
+            } else {
+                msg.style.color = 'red';
+                msg.textContent = data.error || 'Failed to create admin';
+            }
+        });
+    }
+
+    // Event binding
+    adminUsersTab.addEventListener('click', () => {
+        setActiveTab(adminUsersTab);
+        loadAdminUsers();
+    });
+
+    </script>
+</body>
+</html>
