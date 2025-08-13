@@ -32,25 +32,36 @@
     </div>
 
     <script>
-        const form = document.getElementById('loginForm');
-        const errorMessage = document.getElementById('errorMessage');
+form.addEventListener('submit', async function(event) {
+  event.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value.trim();
 
-        form.addEventListener('submit', function(event) {
-            event.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+  if (!username || !password) {
+    errorMessage.textContent = 'Please fill in both fields.';
+    return;
+  }
 
-            if (username === '' || password === '') {
-                errorMessage.textContent = 'Please fill in both fields.';
-            } else {
-                // ✅ Set login flags BEFORE redirect
-                localStorage.setItem('adminLoggedIn', 'true');
-                localStorage.setItem('adminLastActivity', Date.now().toString());
+  try {
+    const res = await fetch('http://172.174.230.197:3000/admin-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      localStorage.setItem('adminLoggedIn', 'true');
+      localStorage.setItem('adminLastActivity', Date.now().toString());
+      // Redirect
+      window.location.href = 'admin-dashboard.html';
+    } else {
+      errorMessage.textContent = data.error || 'Login failed';
+    }
+  } catch (err) {
+    errorMessage.textContent = 'Network error';
+  }
+});
+</script>
 
-                // Simulate success and redirect to admin dashboard
-                window.location.href = 'admin-dashboard.html';
-            }
-        });
-    </script>
 </body>
 </html>
