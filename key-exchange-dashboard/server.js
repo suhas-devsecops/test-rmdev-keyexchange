@@ -766,6 +766,6 @@ cron.schedule('*/10 * * * *', async () => {
 });
 
 //app.listen(3000, () => console.log('Server running on http://localhost:3000'));
-const HOST = '172.174.230.197';
+const HOST = '0.0.0.0';
 const PORT = 3000;
 app.listen(PORT, HOST, () => console.log(`Server running on http://${HOST}:${PORT}`));
