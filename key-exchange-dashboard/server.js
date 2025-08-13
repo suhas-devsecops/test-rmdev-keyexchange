@@ -448,7 +448,7 @@ app.post('/reset-client-password/:id', async (req, res) => {
 
     // Store token (overwrite any existing for this user)
     await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [id]); // Clear old tokens
-    await pool.query('INSERT INTO password_reset_tokens (user_id, token, expiry) VALUES ($1, $2, $3,$4)', [id, token, expiry,'client']);
+    await pool.query('INSERT INTO password_reset_tokens (user_id, token, expiry, user_type) VALUES ($1, $2, $3,$4)', [id, token, expiry,'client']);
 
     // Send email with reset link
     const transporter = nodemailer.createTransport({
